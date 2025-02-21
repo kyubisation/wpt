@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<meta charset="UTF-8">
+<meta name="timeout" content="long">
+<script src="/resources/testharness.js"></script>
+<script src="/resources/testharnessreport.js"></script>
+<script src="./support/csp-violations.js"></script>
+<script>
+  const validTrustedTypePolicyNames = [
+    "1",
+    "abcdefghijklmnopqrstuvwxyz",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+    "0123456789",
+    "policy-name",
+    "policy=name",
+    "policy_name",
+    "policy/name",
+    "policy@name",
+    "policy.name",
+    "policy%name",
+    "policy#name",
+    "6xY/2x=3Y..."
+  ];
+  validTrustedTypePolicyNames.forEach(trustedTypePolicyName => {
+    promise_test(async t => {
+      let results = await tryCreatingTrustedTypePoliciesWithCSP(
+        [trustedTypePolicyName],
+        `header(Content-Security-Policy,trusted-types ${encodeURIComponent(trustedTypePolicyName)},True)`
+      );
+      assert_equals(results.length, 1);
+      assert_equals(results[0].name, trustedTypePolicyName);
+      assert_equals(results[0].exception, null);
+      assert_equals(results[0].violatedPolicies.length, 0);
+    }, `valid tt-policy-name name "${trustedTypePolicyName}"`);
+  });
+
+  const invalidTrustedTypePolicyNames = [
+    "policy name",
+    "policy$name", // https://github.com/w3c/trusted-types/issues/504
+    "policy?name",
+    "policy!name",
+    "policy*name",
+    "política",
+  ];
+  invalidTrustedTypePolicyNames.forEach(trustedTypePolicyName => {
+    promise_test(async t => {
+      let results = await tryCreatingTrustedTypePoliciesWithCSP(
+        [trustedTypePolicyName],
+        `header(Content-Security-Policy,trusted-types ${encodeURIComponent(trustedTypePolicyName)},True)`
+      );
+      assert_equals(results.length, 1);
+      assert_equals(results[0].name, trustedTypePolicyName);
+      assert_true(results[0].exception instanceof TypeError);
+      assert_equals(results[0].violatedPolicies.length, 1);
+    }, `invalid tt-policy-name name "${trustedTypePolicyName}"`);
+  });
+
+  promise_test(async t => {
+    let results = await tryCreatingTrustedTypePoliciesWithCSP(
+      ["_TTP1_", "_TTP2_", "_TTP3_", "_TTP4_", "_TTP5_", "_TTP6_"],
+      "header(Content-Security-Policy,trusted-types _TTP1_%09_TTP2_%0A_TTP3_%0C_TTP4_%0D_TTP5_%20_TTP6_,True)"
+    );
+    assert_equals(results.length, 6);
+    results.forEach((result, index) => {
+      assert_equals(result.exception, null);
+      assert_equals(result.violatedPolicies.length, 0);
+    });
+  }, `directive "trusted-type _TTP1_%09_TTP2_%0A_TTP3_%0C_TTP4_%0D_TTP5_%20_TTP6_" (required-ascii-whitespace)`);
+
+  promise_test(async t => {
+    let results = await tryCreatingTrustedTypePoliciesWithCSP(
+      ["_TTP_"],
+      "header(Content-Security-Policy,trusted-types _TTP_*,True)"
+    );
+    assert_equals(results.length, 1);
+    assert_true(results[0].exception instanceof TypeError);
+    assert_equals(results[0].violatedPolicies.length, 1);
+  }, `invalid directive "trusted-type _TTP" (no ascii whitespace)`);
+</script>
